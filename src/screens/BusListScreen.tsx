@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
 import { MOCK_ROUTES } from '../services/busApi';
+import AdBanner from '../components/AdBanner';
 
 const ALL_ROUTES = Object.values(MOCK_ROUTES);
 
@@ -73,6 +74,7 @@ export default function BusListScreen() {
           </View>
         }
       />
+      <AdBanner />
     </SafeAreaView>
   );
 }

@@ -16,6 +16,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { getArrivalsByStation, searchStations, Station, BusArrival } from '../services/busApi';
 import type { RootStackParamList } from '../navigation/AppNavigator';
+import AdBanner from '../components/AdBanner';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -147,12 +148,7 @@ export default function HomeScreen() {
         />
       )}
 
-      <View style={styles.mockBadge}>
-        <Icon name="info-outline" size={14} color="#FF9800" />
-        <Text style={styles.mockBadgeText}>
-          {isApiConfigured() ? '' : '현재 목업 데이터 사용 중 (환경변수 설정 필요)'}
-        </Text>
-      </View>
+      <AdBanner />
     </SafeAreaView>
   );
 }

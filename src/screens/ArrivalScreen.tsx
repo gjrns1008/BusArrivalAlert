@@ -12,6 +12,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 
 import { getArrivalsByStation, BusArrival } from '../services/busApi';
 import type { RootStackParamList } from '../navigation/AppNavigator';
+import AdBanner from '../components/AdBanner';
 
 export default function ArrivalScreen() {
   const route = useRoute();
@@ -145,6 +146,7 @@ export default function ArrivalScreen() {
           </View>
         )}
       />
+      <AdBanner />
     </View>
   );
 }

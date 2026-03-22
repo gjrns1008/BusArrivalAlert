@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import AdBanner from '../components/AdBanner';
 
 export default function SettingsScreen() {
   const [notifications, setNotifications] = useState(true);
@@ -122,6 +123,7 @@ export default function SettingsScreen() {
           </View>
         </View>
       </ScrollView>
+      <AdBanner />
     </SafeAreaView>
   );
 }
