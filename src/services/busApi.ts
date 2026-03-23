@@ -12,20 +12,51 @@ const BASE_URL = 'http://ws.bus.go.kr/api/rest/arrive';
 
 // 목업 데이터
 const MOCK_STATIONS = [
-  { stationId: '122000123', stationName: '역삼동 코오롱아파트', routes: ['462', '2411', 'nw1611'] },
-  { stationId: '122000456', stationName: '선릉역 1번출구', routes: ['462', '1400', '360'] },
-  { stationId: '122000789', stationName: '도곡동 대우아파트', routes: ['462', '1471', '750A'] },
-  { stationId: '122000111', stationName: '삼성역 5번출구', routes: ['51', '62', '740'] },
-  { stationId: '122000222', stationName: '논현역 2번출구', routes: ['145', '360', '500'] },
+  {
+    stationId: '122000123',
+    stationName: '역삼동 코오롱아파트',
+    routes: ['462', '2411', 'nw1611'],
+  },
+  {
+    stationId: '122000456',
+    stationName: '선릉역 1번출구',
+    routes: ['462', '1400', '360'],
+  },
+  {
+    stationId: '122000789',
+    stationName: '도곡동 대우아파트',
+    routes: ['462', '1471', '750A'],
+  },
+  {
+    stationId: '122000111',
+    stationName: '삼성역 5번출구',
+    routes: ['51', '62', '740'],
+  },
+  {
+    stationId: '122000222',
+    stationName: '논현역 2번출구',
+    routes: ['145', '360', '500'],
+  },
 ];
 
-const MOCK_ROUTES: Record<string, { busNumber: string; destination: string; color: string }> = {
+const MOCK_ROUTES: Record<
+  string,
+  { busNumber: string; destination: string; color: string }
+> = {
   '462': { busNumber: '462', destination: '잠실환승센터', color: '#2196F3' },
   '2411': { busNumber: '2411', destination: '강남역', color: '#4CAF50' },
-  'nw1611': { busNumber: '1611', destination: '노원역', color: '#FF9800' },
-  '1400': { busNumber: '1400', destination: '구로디지털단지역', color: '#9C27B0' },
+  nw1611: { busNumber: '1611', destination: '노원역', color: '#FF9800' },
+  '1400': {
+    busNumber: '1400',
+    destination: '구로디지털단지역',
+    color: '#9C27B0',
+  },
   '360': { busNumber: '360', destination: '상계동', color: '#F44336' },
-  '1471': { busNumber: '1471', destination: '고속버스터미널', color: '#009688' },
+  '1471': {
+    busNumber: '1471',
+    destination: '고속버스터미널',
+    color: '#009688',
+  },
   '750A': { busNumber: '750A', destination: '은평구청', color: '#795548' },
   '51': { busNumber: '51', destination: '오금동', color: '#607D8B' },
   '62': { busNumber: '62', destination: '도봉산역', color: '#E91E63' },
@@ -36,7 +67,6 @@ const MOCK_ROUTES: Record<string, { busNumber: string; destination: string; colo
 
 function generateMockArrivals(stationId: string, routeNo: string) {
   const route = MOCK_ROUTES[routeNo];
-  const now = Date.now();
   return {
     stationId,
     routeNo,
@@ -70,12 +100,43 @@ export interface Station {
   routes: string[];
 }
 
+export interface RouteSummary {
+  routeNo: string;
+  busNumber: string;
+  destination: string;
+  color: string;
+}
+
+export interface RouteDetail extends RouteSummary {
+  firstBus: string;
+  lastBus: string;
+  interval: string;
+  majorStops: string[];
+}
+
+const ROUTE_STOP_MAP: Record<string, string[]> = {
+  '462': ['역삼동 코오롱아파트', '선릉역', '삼성역', '잠실새내역'],
+  '2411': ['역삼동 코오롱아파트', '강남역', '교대역', '잠실역'],
+  '1611': ['역삼동 코오롱아파트', '성수역', '청량리역', '노원역'],
+  '1400': ['선릉역', '강남역', '신도림역', '구로디지털단지역'],
+  '360': ['선릉역', '논현역', '고속터미널', '상계동'],
+  '1471': ['도곡동 대우아파트', '양재역', '교대역', '고속버스터미널'],
+  '750A': ['도곡동 대우아파트', '광화문', '연신내역', '은평구청'],
+  '51': ['삼성역', '대치역', '수서역', '오금동'],
+  '62': ['삼성역', '창동역', '쌍문역', '도봉산역'],
+  '740': ['삼성역', '강남역', '용산역', '노량진역'],
+  '145': ['논현역', '양재역', '남산', '상암동'],
+  '500': ['논현역', '서초역', '교대역', '남부터미널'],
+};
+
 // API 키가 없으면 목업 데이터 반환
 function isApiConfigured(): boolean {
   return API_KEY.length > 0;
 }
 
-export async function getArrivalsByStation(stationId: string): Promise<BusArrival[]> {
+export async function getArrivalsByStation(
+  stationId: string,
+): Promise<BusArrival[]> {
   if (!isApiConfigured()) {
     // 목업 데이터 반환
     const station = MOCK_STATIONS.find(s => s.stationId === stationId);
@@ -116,13 +177,16 @@ export async function getArrivalsByStation(stationId: string): Promise<BusArriva
 export async function searchStations(query: string): Promise<Station[]> {
   if (!isApiConfigured()) {
     // 목업 데이터에서 검색
-    return MOCK_STATIONS.filter(s =>
-      s.stationName.includes(query) || s.routes.some(r => r.includes(query))
+    return MOCK_STATIONS.filter(
+      s =>
+        s.stationName.includes(query) || s.routes.some(r => r.includes(query)),
     );
   }
 
   try {
-    const url = `${BASE_URL}/getStationByName?serviceKey=${API_KEY}&stSrch=${encodeURIComponent(query)}&resultType=json`;
+    const url = `${BASE_URL}/getStationByName?serviceKey=${API_KEY}&stSrch=${encodeURIComponent(
+      query,
+    )}&resultType=json`;
     const response = await fetch(url);
     const data = await response.json();
 
@@ -144,7 +208,10 @@ export async function searchStations(query: string): Promise<Station[]> {
   }
 }
 
-export async function getNearbyStations(lat: number, lng: number): Promise<Station[]> {
+export async function getNearbyStations(
+  lat: number,
+  lng: number,
+): Promise<Station[]> {
   if (!isApiConfigured()) {
     return MOCK_STATIONS;
   }
@@ -170,6 +237,48 @@ export async function getNearbyStations(lat: number, lng: number): Promise<Stati
     console.error('주변 정류소 검색 실패:', error);
     return [];
   }
+}
+
+export function getAllRoutes(): RouteSummary[] {
+  return Object.entries(MOCK_ROUTES).map(([routeNo, route]) => ({
+    routeNo,
+    busNumber: route.busNumber,
+    destination: route.destination,
+    color: route.color,
+  }));
+}
+
+export function getRouteDetail(routeNo: string): RouteDetail {
+  const route = MOCK_ROUTES[routeNo] ?? {
+    busNumber: routeNo,
+    destination: '목적지 정보 없음',
+    color: '#607D8B',
+  };
+  const seed = route.busNumber
+    .split('')
+    .reduce((acc, char) => acc + char.charCodeAt(0), 0);
+
+  return {
+    routeNo,
+    busNumber: route.busNumber,
+    destination: route.destination,
+    color: route.color,
+    firstBus: `${String(4 + (seed % 2)).padStart(2, '0')}:${String(
+      (seed % 4) * 10,
+    ).padStart(2, '0')}`,
+    lastBus: `${String(22 + (seed % 2)).padStart(2, '0')}:${String(
+      (seed % 6) * 10,
+    ).padStart(2, '0')}`,
+    interval: `${6 + (seed % 5)}-${10 + (seed % 7)}분`,
+    majorStops: ROUTE_STOP_MAP[route.busNumber] ?? ['주요 정류장 정보 없음'],
+  };
+}
+
+export function getApiStatus() {
+  return {
+    configured: isApiConfigured(),
+    modeLabel: isApiConfigured() ? '실시간 API 연결됨' : '목업 데이터 사용 중',
+  };
 }
 
 export { MOCK_STATIONS, MOCK_ROUTES };

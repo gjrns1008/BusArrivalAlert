@@ -23,6 +23,18 @@ export type MainTabParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
+function TabBarHomeIcon({ color, size }: { color: string; size: number }) {
+  return <Icon name="home" size={size} color={color} />;
+}
+
+function TabBarBusIcon({ color, size }: { color: string; size: number }) {
+  return <Icon name="directions-bus" size={size} color={color} />;
+}
+
+function TabBarSettingsIcon({ color, size }: { color: string; size: number }) {
+  return <Icon name="settings" size={size} color={color} />;
+}
+
 function MainTabs() {
   return (
     <Tab.Navigator
@@ -30,15 +42,14 @@ function MainTabs() {
         tabBarActiveTintColor: '#2196F3',
         tabBarInactiveTintColor: '#999',
         headerShown: false,
-      }}>
+      }}
+    >
       <Tab.Screen
         name="Home"
         component={HomeScreen}
         options={{
           tabBarLabel: '홈',
-          tabBarIcon: ({ color, size }) => (
-            <Icon name="home" size={size} color={color} />
-          ),
+          tabBarIcon: TabBarHomeIcon,
         }}
       />
       <Tab.Screen
@@ -46,9 +57,7 @@ function MainTabs() {
         component={BusListScreen}
         options={{
           tabBarLabel: '버스 검색',
-          tabBarIcon: ({ color, size }) => (
-            <Icon name="directions-bus" size={size} color={color} />
-          ),
+          tabBarIcon: TabBarBusIcon,
         }}
       />
       <Tab.Screen
@@ -56,9 +65,7 @@ function MainTabs() {
         component={SettingsScreen}
         options={{
           tabBarLabel: '설정',
-          tabBarIcon: ({ color, size }) => (
-            <Icon name="settings" size={size} color={color} />
-          ),
+          tabBarIcon: TabBarSettingsIcon,
         }}
       />
     </Tab.Navigator>

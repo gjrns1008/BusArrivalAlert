@@ -1,48 +1,61 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
+  ActivityIndicator,
   FlatList,
   RefreshControl,
-  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
-import { getArrivalsByStation, BusArrival } from '../services/busApi';
-import type { RootStackParamList } from '../navigation/AppNavigator';
 import AdBanner from '../components/AdBanner';
+import StatusPill from '../components/StatusPill';
+import { useAppPreferences } from '../context/AppPreferencesContext';
+import { getArrivalsByStation, type BusArrival } from '../services/busApi';
+
+type RouteParams = { stationId: string; stationName: string };
+type FilterKey = 'all' | 'soon' | 'lowFloor' | 'lastBus';
+
+const ALERT_MINUTES = [3, 5, 10];
 
 export default function ArrivalScreen() {
   const route = useRoute();
   const navigation = useNavigation();
-  const { stationId, stationName } = route.params as { stationId: string; stationName: string };
+  const { stationId, stationName } = route.params as RouteParams;
+  const { getAlertMinutes, settings, toggleAlertMinute } = useAppPreferences();
 
   const [arrivals, setArrivals] = useState<BusArrival[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
 
-  useEffect(() => {
-    navigation.setOptions({ title: stationName });
-    loadArrivals();
-  }, [stationId]);
-
-  // 30초마다 자동 새로고침
-  useEffect(() => {
-    const interval = setInterval(() => {
-      loadArrivals();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [stationId]);
-
-  async function loadArrivals() {
+  const loadArrivals = useCallback(async () => {
     const data = await getArrivalsByStation(stationId);
     setArrivals(data);
     setLastUpdate(new Date());
     setLoading(false);
-  }
+  }, [stationId]);
+
+  useEffect(() => {
+    navigation.setOptions({ title: stationName });
+    loadArrivals();
+  }, [loadArrivals, navigation, stationName]);
+
+  useEffect(() => {
+    if (!settings.autoRefresh) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      loadArrivals();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [loadArrivals, settings.autoRefresh]);
 
   async function onRefresh() {
     setRefreshing(true);
@@ -50,30 +63,63 @@ export default function ArrivalScreen() {
     setRefreshing(false);
   }
 
+  const filteredArrivals = useMemo(() => {
+    switch (activeFilter) {
+      case 'soon':
+        return arrivals.filter(item => item.arrTime <= 5);
+      case 'lowFloor':
+        return arrivals.filter(item => item.isLowFloor);
+      case 'lastBus':
+        return arrivals.filter(item => item.isLast);
+      default:
+        return arrivals;
+    }
+  }, [activeFilter, arrivals]);
+
   function formatTime(minutes: number): string {
-    if (minutes <= 0) return '도착';
+    if (minutes <= 0) return '곧 도착';
     if (minutes === 1) return '1분 이내';
     return `${minutes}분`;
   }
 
   function getTimeColor(minutes: number): string {
-    if (minutes <= 1) return '#F44336';
-    if (minutes <= 3) return '#FF9800';
-    if (minutes <= 5) return '#2196F3';
-    return '#4CAF50';
+    if (minutes <= 1) return '#D32F2F';
+    if (minutes <= 3) return '#F57C00';
+    if (minutes <= 5) return '#1976D2';
+    return '#2E7D32';
   }
 
-  function getSeatText(seats: number): string {
-    if (seats === 0) return '人为本';
-    if (seats < 10) return `空席${seats}`;
-    return '空席多';
+  function getCrowdInfo(seats: number) {
+    if (seats <= 0) {
+      return { label: '혼잡', tone: 'red' as const };
+    }
+    if (seats < 8) {
+      return { label: `보통 ${seats}석`, tone: 'orange' as const };
+    }
+    return { label: `여유 ${seats}석`, tone: 'green' as const };
   }
 
   function formatLastUpdate(date: Date): string {
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    const seconds = date.getSeconds().toString().padStart(2, '0');
-    return `${hours}:${minutes}:${seconds}`;
+    return `${String(date.getHours()).padStart(2, '0')}:${String(
+      date.getMinutes(),
+    ).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+  }
+
+  function renderFilterChip(filter: FilterKey, label: string) {
+    const active = activeFilter === filter;
+    return (
+      <TouchableOpacity
+        key={filter}
+        style={[styles.filterChip, active && styles.filterChipActive]}
+        onPress={() => setActiveFilter(filter)}
+      >
+        <Text
+          style={[styles.filterChipText, active && styles.filterChipTextActive]}
+        >
+          {label}
+        </Text>
+      </TouchableOpacity>
+    );
   }
 
   if (loading) {
@@ -85,192 +131,215 @@ export default function ArrivalScreen() {
     );
   }
 
-  if (arrivals.length === 0) {
-    return (
-      <View style={styles.centerContainer}>
-        <Icon name="directions-bus" size={64} color="#DDD" />
-        <Text style={styles.emptyText}>해당 정류소에 도착 예정인 버스가 없습니다</Text>
-        <Text style={styles.updateText}>마지막 확인: {formatLastUpdate(lastUpdate)}</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <View style={styles.updateBar}>
-        <Icon name="refresh" size={14} color="#999" />
         <Text style={styles.updateBarText}>
-          마지막 업데이트: {formatLastUpdate(lastUpdate)} • 30초마다 자동 갱신
+          마지막 업데이트 {formatLastUpdate(lastUpdate)}
         </Text>
+        <StatusPill
+          label={settings.autoRefresh ? '30초 자동 갱신' : '수동 새로고침'}
+          tone="gray"
+        />
+      </View>
+
+      <View style={styles.filterRow}>
+        {renderFilterChip('all', '전체')}
+        {renderFilterChip('soon', '5분 이내')}
+        {renderFilterChip('lowFloor', '저상버스')}
+        {renderFilterChip('lastBus', '막차')}
       </View>
 
       <FlatList
-        data={arrivals}
-        keyExtractor={item => item.routeNo}
+        data={filteredArrivals}
+        keyExtractor={item => `${item.routeNo}-${item.arrTime}`}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2196F3']} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#2196F3']}
+          />
         }
-        renderItem={({ item }) => (
-          <View style={styles.arrivalCard}>
-            <View style={styles.cardLeft}>
-              <View style={[styles.busNumberBadge, { backgroundColor: item.routeType + '20' }]}>
-                <Text style={[styles.busNumber, { color: item.routeType }]}>{item.busNumber}</Text>
+        ListEmptyComponent={
+          <View style={styles.centerContainer}>
+            <Icon name="directions-bus" size={64} color="#DDD" />
+            <Text style={styles.emptyText}>
+              선택한 필터에 맞는 버스가 없습니다
+            </Text>
+          </View>
+        }
+        renderItem={({ item }) => {
+          const crowd = getCrowdInfo(item.seatAvailable);
+          const alertMinutes = getAlertMinutes(stationId, item.routeNo);
+
+          return (
+            <View style={styles.arrivalCard}>
+              <View style={styles.cardTop}>
+                <View style={styles.cardLeft}>
+                  <View
+                    style={[
+                      styles.busNumberBadge,
+                      { backgroundColor: `${item.routeType}20` },
+                    ]}
+                  >
+                    <Text style={[styles.busNumber, { color: item.routeType }]}>
+                      {item.busNumber}
+                    </Text>
+                  </View>
+                  <View style={styles.busInfo}>
+                    <Text style={styles.destination}>{item.destination}</Text>
+                    <View style={styles.tagRow}>
+                      {item.isLowFloor && (
+                        <StatusPill label="저상" tone="blue" />
+                      )}
+                      {item.isLast && <StatusPill label="막차" tone="orange" />}
+                      <StatusPill label={crowd.label} tone={crowd.tone} />
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.cardRight}>
+                  <Text
+                    style={[
+                      styles.arrivalTime,
+                      { color: getTimeColor(item.arrTime) },
+                    ]}
+                  >
+                    {formatTime(item.arrTime)}
+                  </Text>
+                  <Text style={styles.prevStation}>
+                    전 정류장 {item.arrPrevStation}개
+                  </Text>
+                </View>
               </View>
-              <View style={styles.busInfo}>
-                <Text style={styles.destination}>{item.destination}</Text>
-                <View style={styles.busDetails}>
-                  {item.isLowFloor && (
-                    <View style={styles.tag}>
-                      <Text style={styles.tagText}>저상</Text>
-                    </View>
-                  )}
-                  {item.isLast && (
-                    <View style={[styles.tag, styles.lastTag]}>
-                      <Text style={styles.tagText}>막차</Text>
-                    </View>
-                  )}
-                  <Text style={styles.seatText}>{getSeatText(item.seatAvailable)}</Text>
+
+              <View style={styles.alertSection}>
+                <Text style={styles.alertTitle}>도착 알림</Text>
+                <View style={styles.alertRow}>
+                  {ALERT_MINUTES.map(minute => {
+                    const active = alertMinutes.includes(minute);
+                    return (
+                      <TouchableOpacity
+                        key={`${item.routeNo}-${minute}`}
+                        style={[
+                          styles.alertChip,
+                          active && styles.alertChipActive,
+                        ]}
+                        onPress={() =>
+                          toggleAlertMinute(stationId, item.routeNo, minute)
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.alertChipText,
+                            active && styles.alertChipTextActive,
+                          ]}
+                        >
+                          {minute}분 전
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </View>
             </View>
-
-            <View style={styles.cardRight}>
-              <Text style={[styles.arrivalTime, { color: getTimeColor(item.arrTime) }]}>
-                {formatTime(item.arrTime)}
-              </Text>
-              <Text style={styles.prevStation}>
-                전역 {item.arrPrevStation}번째
-              </Text>
-            </View>
-          </View>
-        )}
+          );
+        }}
+        ListFooterComponent={<AdBanner />}
       />
-      <AdBanner />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
+  container: { flex: 1, backgroundColor: '#F5F7FB' },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#F5F5F5',
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#999',
-  },
+  loadingText: { marginTop: 12, fontSize: 16, color: '#999' },
   emptyText: {
-    fontSize: 16,
-    color: '#999',
+    fontSize: 15,
+    color: '#90A4AE',
     marginTop: 12,
     textAlign: 'center',
   },
-  updateText: {
-    fontSize: 12,
-    color: '#BBB',
-    marginTop: 8,
-  },
   updateBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
     paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     backgroundColor: '#FAFAFA',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
-    gap: 4,
   },
-  updateBarText: {
-    fontSize: 12,
-    color: '#999',
+  updateBarText: { fontSize: 12, color: '#78909C' },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
-  listContent: {
-    padding: 16,
-    paddingBottom: 32,
+  filterChip: {
+    backgroundColor: '#ECEFF1',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
+  filterChipActive: { backgroundColor: '#2196F3' },
+  filterChipText: { color: '#607D8B', fontSize: 12, fontWeight: '700' },
+  filterChipTextActive: { color: '#FFF' },
+  listContent: { padding: 16, paddingBottom: 24 },
   arrivalCard: {
     backgroundColor: '#FFF',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
+  },
+  cardTop: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
+    alignItems: 'flex-start',
   },
-  cardLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
+  cardLeft: { flexDirection: 'row', flex: 1, marginRight: 12 },
   busNumberBadge: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 8,
-    minWidth: 56,
+    borderRadius: 10,
+    minWidth: 60,
     alignItems: 'center',
   },
-  busNumber: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  busNumber: { fontSize: 18, fontWeight: '700' },
+  busInfo: { marginLeft: 12, flex: 1 },
+  destination: { fontSize: 15, color: '#263238', fontWeight: '600' },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  cardRight: { alignItems: 'flex-end' },
+  arrivalTime: { fontSize: 24, fontWeight: '800' },
+  prevStation: { fontSize: 12, color: '#78909C', marginTop: 4 },
+  alertSection: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#ECEFF1',
   },
-  busInfo: {
-    marginLeft: 12,
-    flex: 1,
+  alertTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 8,
   },
-  destination: {
-    fontSize: 15,
-    color: '#333',
-    fontWeight: '500',
-  },
-  busDetails: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    gap: 6,
-  },
-  tag: {
+  alertRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  alertChip: {
     backgroundColor: '#E3F2FD',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  lastTag: {
-    backgroundColor: '#FFF3E0',
-  },
-  tagText: {
-    fontSize: 11,
-    color: '#2196F3',
-    fontWeight: '500',
-  },
-  seatText: {
-    fontSize: 11,
-    color: '#999',
-  },
-  cardRight: {
-    alignItems: 'flex-end',
-  },
-  arrivalTime: {
-    fontSize: 22,
-    fontWeight: 'bold',
-  },
-  prevStation: {
-    fontSize: 11,
-    color: '#BBB',
-    marginTop: 2,
-  },
+  alertChipActive: { backgroundColor: '#1565C0' },
+  alertChipText: { color: '#1565C0', fontSize: 12, fontWeight: '700' },
+  alertChipTextActive: { color: '#FFF' },
 });
