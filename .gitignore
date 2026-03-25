@@ -79,3 +79,8 @@ yarn-error.log
 
 # Claude Code
 .claude/
+
+# Play Store & Assets
+play-account.json
+*.png
+*.lnk
